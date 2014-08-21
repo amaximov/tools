@@ -1,0 +1,46 @@
+#!/usr/bin/expect -f
+
+# usage: <username> <password> <host> <local script to run> [arguments to the script]
+
+set force_conservative 1  ;# set to 1 to force conservative mode even if
+			  ;# script wasn't run conservatively originally
+if {$force_conservative} {
+	set send_slow {1 .1}
+	proc send {ignore arg} {
+		sleep .1
+		exp_send -s -- $arg
+	}
+}
+
+proc shift {inputlist} {
+    upvar $inputlist argv
+    set arg  [lindex $argv 0]
+    set argv [lreplace $argv[set argv {}] 0 0]
+    return $arg
+}
+
+set username [lindex $argv 0]
+set password [lindex $argv 1]
+set host [lindex $argv 2]
+set script [lindex $argv 3]
+
+shift argv
+shift argv
+shift argv
+shift argv
+
+puts "running $script on $username@$host"
+
+set filename /tmp/remote-[pid].sh
+set fd [open $filename w]
+puts $fd "ssh -T $username@$host '/bin/bash -s' $argv < $script"
+close $fd
+exec chmod u+x $filename
+
+set timeout -1
+spawn $filename
+expect -exact "$username@$host's password: "
+send -- "$password\r"
+expect eof
+
+file delete $filename
